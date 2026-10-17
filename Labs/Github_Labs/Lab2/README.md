@@ -1,101 +1,118 @@
-# Using GitHub Actions for Model Training and Versioning
+# Lab 2: Model Training, Calibration and Versioning with GitHub Actions
 
-This repository demonstrates how to use GitHub Actions to automate the process of training a machine learning model, storing the model, and versioning it. This allows you to easily update and improve your model in a collaborative environment.
+This lab uses GitHub Actions to automatically train a classifier, calibrate its predicted probabilities, evaluate it against a quality gate, and version the resulting model and metrics by committing them back to the repository.
 
-Watch the tutorial video for this lab at [Github action Lab2](https://youtu.be/cj5sXIMZUjQ)
+## What the pipeline does
+
+There are two workflows. GitHub only runs workflows from the repository root, so the active files are in `.github/workflows/`. Identical copies are kept in `Labs/Github_Labs/Lab2/workflows/` for reference.
+
+**1. On push** (`github_lab2_model_calibration_on_push.yml`)
+
+Runs when code in `Labs/Github_Labs/Lab2/src/`, `requirements.txt`, or the workflow file itself is pushed to `main`. It can also be started by hand.
+
+Train -> Calibrate -> Evaluate + quality gate -> Commit model and metrics
+
+**2. Nightly** (`github_lab2_model_calibration.yml`)
+
+Runs every day at 05:00 UTC, and can also be started by hand. Each night it trains a model with a randomly sampled hyperparameter configuration, calibrates it, and compares it with the current model (the most recently committed one). It commits the new model only if it passes the quality gate and has a lower Brier score. Otherwise it commits nothing.
+
+Train (random config) -> Calibrate -> Evaluate + compare with current model -> Commit only if better
+
+## Dataset and model
+
+- **Dataset:** Breast Cancer Wisconsin (bundled with scikit-learn, so nothing is downloaded). It has 569 samples, 30 numeric features, and binary labels. Labels are flipped so that 1 = malignant.
+- **Split:** a fixed 60/20/20 train / calibration / test split (seed 42). Every run is scored on the same test set, so metrics are comparable across runs.
+- **Model:** `GradientBoostingClassifier`.
+- **Calibration:** `CalibratedClassifierCV` with sigmoid (Platt scaling, the default) or isotonic regression, fit on the calibration split. The trained model only makes predictions on these rows and never learns from them; the calibrator learns from those predictions how to correct the model's probabilities.
+- **Metrics:** F1, accuracy, Brier score and log loss, each computed before and after calibration. Brier score and log loss measure how well the probabilities are calibrated; lower is better.
+
+## Changes from the original lab
+
+### Workflow changes
+
+1. **Calibration actually happens now.** The original "calibration" workflows only retrained the model. There is now a dedicated calibration step (`src/calibrate_model.py`).
+2. **Quality gate.** If the calibrated model's test F1 falls below a threshold (default 0.90), the run fails and nothing is committed.
+3. **The nightly workflow has its own job.** It does a nightly hyperparameter search and promotes a new model only if it beats the current one on Brier score. Previously it duplicated the push workflow, and its paths pointed to `./src/...`, which does not exist in this repo, so it could not run.
+4. **Manual runs with inputs.** Both workflows can be started from the Actions tab (`workflow_dispatch`), with a choice of calibration method (sigmoid / isotonic) and the F1 threshold.
+5. **Run summary.** Each run posts a table of metrics before and after calibration, plus the gate and promotion decisions, on the run's summary page.
+6. **Path filter on push.** The push workflow only runs when Lab 2 code changes, not on every push to the repo.
+
+### Code changes
+
+- Synthetic `make_classification` data replaced by the Breast Cancer dataset. The original could generate 0 samples and crash, because it used `random.randint(0, 2000)`.
+- The model is no longer evaluated on its own training data. There is a proper held-out test set (`src/dataset.py`).
+- RandomForest replaced by GradientBoosting, with optional random hyperparameters (`--search-seed`).
+- `evaluate_model.py` now writes metrics into `metrics/`. Previously it created the folder but saved the file to the current directory.
+- MLflow logging removed. Metrics are tracked in versioned JSON files in the repo and on the Actions summary page.
+- Removed unused files: `src/test.ipynb` (leftover Lab 1 notebook) and the `test/` folder (it only held an empty `__init__.py`).
+- Pinned dependency versions.
+- The two Lab 1 test workflows were disabled in this fork's Actions tab, so only Lab 2 runs appear there.
 
 
-## Prerequisites
+## Running it on GitHub (no local install needed)
 
-- [GitHub](https://github.com) account
-- Basic knowledge of Python and machine learning
-- Git command-line tool (optional)
+You only need a GitHub account.
 
-## Getting Started
+1. Fork this repository.
+2. In the fork, open the **Actions** tab and click "I understand my workflows, go ahead and enable them".
+3. Optional: in the left sidebar, disable the two Lab 1 test workflows (open each one, "..." menu, **Disable workflow**) so only Lab 2 runs appear.
+4. In the left sidebar, open **Lab 2 - Nightly Model Search and Calibration** and click **Enable workflow**. GitHub disables scheduled workflows in forks by default.
+5. Start a run, using either option:
+   - Open **Lab 2 - Train, Calibrate and Evaluate on Push**, click **Run workflow**, pick the options, then click **Run workflow** again.
+   - Or push any change to a file in `Labs/Github_Labs/Lab2/src/`.
+6. Do the same for the nightly workflow to test it without waiting for 05:00 UTC.
 
-1. **Fork this Repository**: Click the "Fork" button at the top right of this [repository](https://github.com/raminmohammadi/MLOps/) to create your own copy.
-3. **Clone Your Repository**:
-   ```bash
-   git clone https://github.com/your-username/your-forked-repo.git
-   cd your-forked-repo
+### What a successful run looks like
 
-   ```
-4. GitHub account
-5. Basic knowledge of Python and machine learning
-6. Git command-line tool (optional)
+- Every step has a green check.
+- The run's **Summary** page shows a table like this (exact numbers vary by run):
 
-# Running the Workflow
-## Customize Model Training
-1. Modify the `train_model.py` script in the `src/` directory according to your dataset and model requirements. This script generates synthetic data for demonstration purposes.
+  | Metric | Uncalibrated | Calibrated |
+  |---|---|---|
+  | f1 | 0.95 | 0.9367 |
+  | accuracy | 0.9649 | 0.9561 |
+  | brier | 0.0337 | 0.0347 |
+  | log_loss | 0.1381 | 0.1312 |
 
-## Push Your Changes:
-1. Commit your changes and push them to your forked repository.
+  followed by `Quality gate (F1 >= 0.9): passed` and the promotion decision.
+- A new commit from `github-actions[bot]` appears on `main`. It adds `models/model_<ts>_gb.joblib`, `models/model_<ts>_gb_calibrated.joblib` and `metrics/<ts>_metrics.json` under `Labs/Github_Labs/Lab2/`.
+- For the nightly workflow, a green run with "Promote: False" is also a success. It means the new model was not better, so the current model was kept and nothing was committed.
 
-## GitHub Actions Workflow:
-1. Once you push changes to the main branch, the GitHub Actions workflow will be triggered automatically.
+Note: calibration does not always improve every metric. With the default settings it lowers log loss but raises the Brier score slightly, because gradient boosting is already fairly well calibrated and the calibration set is small (114 rows). The pipeline measures this on every run instead of assuming calibration helped.
 
-## View Workflow Progress:
-1. You can track the progress of the workflow by going to the "Actions" tab in your GitHub repository.
+To see the quality gate fail: run the push workflow by hand with `min_f1` set to `0.99`. The evaluate step fails (red X) and no commit is made.
 
-## Retrieve the Trained Model:
-1. After the workflow completes successfully, the trained model will be stored in the `models/` directory.
+## Running it locally (optional)
 
-# Model Evaluation
-The model evaluation is performed automatically within the GitHub Actions workflow. The evaluation results (e.g., F1 Score) are stored in the `metrics/` directory.
+**Requirements:**
+- Git 2.x
+- Python 3.11 (3.10 to 3.12 also work)
 
-# Versioning the Model
-Each time you run the workflow, a new version of the model is created and stored. You can access and use these models for your projects.
+On Windows, use Git Bash for the commands below.
 
-# GitHub Actions Workflow Details
-The workflow consists of the following steps:
+```bash
+git clone https://github.com/<your-username>/MLOps-Lab-2.git
+cd MLOps-Lab-2/Labs/Github_Labs/Lab2
 
-- Generate and Store Timestamp: A timestamp is generated and stored in a file for versioning.
-- Model Training: The `train_model.py` script is executed, which trains a random forest classifier on synthetic data and stores the model in the `models/` directory.
-- Model Evaluation: The `evaluate_model.py` script is executed to evaluate the model's F1 Score on synthetic data, and the results are stored in the `metrics/` directory.
-- Store and Version the New Model: The trained model is moved to the `models/` directory with a timestamp-based version.
-- Commit and Push Changes: The metrics and updated model are committed to the repository, allowing you to track changes.
+python -m venv .venv
+source .venv/bin/activate          # Windows Git Bash: source .venv/Scripts/activate
+pip install -r requirements.txt    # scikit-learn 1.6.1, numpy 2.2.6, joblib 1.4.2
 
-# Model Calibration Workflow
-## Overview
-The `model_calibration_on_push.yml` workflow is a part of the automation process for machine learning model calibration within this repository. It is essential for ensuring that the model's predictions are accurate and well-calibrated, a critical step in machine learning applications.
+# Push-workflow equivalent
+python src/train_model.py --timestamp 20260101000000
+python src/calibrate_model.py --timestamp 20260101000000 --method sigmoid
+python src/evaluate_model.py --timestamp 20260101000000 --min-f1 0.90
 
-## Workflow Purpose
-This workflow's primary purpose is to calibrate a trained machine learning model after each push to the main branch of the repository. Calibration is a crucial step to align model predictions with reality, particularly when dealing with classification tasks. In simple terms, calibration ensures that a model's predicted probabilities match the actual likelihood of an event happening.
+# Nightly-workflow equivalent
+python src/train_model.py --timestamp 20260102000000 --search-seed 20260102000000
+python src/calibrate_model.py --timestamp 20260102000000
+python src/evaluate_model.py --timestamp 20260102000000 --compare-latest
+```
 
-## Workflow Execution
-Let's break down how this workflow operates step by step:
+Each command prints what it did. The evaluate step prints the metrics table and the gate and promotion decisions. Models are saved to `models/` and metrics to `metrics/`.
 
-### Step 1: Trigger on Push to Main Branch
-- This workflow is automatically initiated when changes are pushed to the main branch of the repository. It ensures that the model remains calibrated and up-to-date with the latest data and adjustments.
+Locally, every run writes a metrics file. In CI, a nightly run that is not promoted is never committed, so the "current model" comparison only sees promoted models.
 
-### Step 2: Prepare Environment
-- The workflow begins by setting up a Python environment and installing the necessary Python libraries and dependencies. This is crucial to ensure that the model calibration process can be executed without any issues.
+## License
 
-### Step 3: Load Trained Model
-- The trained machine learning model, which has been previously saved in the `models/` directory, is loaded into memory. This model should be the most recent version, as trained by the `train_model.py` script.
-
-### Step 4: Calibrate Model Probabilities
-- In this step, the model's predicted probabilities are calibrated. Calibration methods, such as Platt scaling or isotonic regression, are applied. These methods adjust the model's predicted probabilities to match the actual likelihood of an event occurring. This calibration step is critical for reliable decision-making based on the model's predictions.
-
-### Step 5: Save Calibrated Model
-- The calibrated model is saved back to the `models/` directory. It is given a distinct identifier to differentiate it from the original, uncalibrated models. This ensures that both the original model and the calibrated model are available for comparison and use.
-
-### Step 6: Commit and Push Changes
-- This final step involves committing the calibrated model and any other relevant files to the repository. It is essential to keep track of the changes made during the calibration process and to store the calibrated model in the repository for future applications and reference.
-
-# Customization
-The `model_calibration_on_push.yml` workflow can be customized to align with your specific project requirements. You can modify calibration methods, the directory where the calibrated model is saved, or any other aspects of the calibration process to meet your project's unique needs.
-
-# Integration with Model Training
-This workflow is designed to work seamlessly with the main model training workflow, `model_retraining_on_push.yml`. In the initial workflow, the model is trained, and in this workflow, the calibrated model is generated. The calibrated model can then be used in applications where precise, well-calibrated probabilities are essential.
-
-# License
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-# Acknowledgments
-- This project uses GitHub Actions for continuous integration and deployment.
-- Model training and evaluation are powered by Python and scikit-learn.
-
-# Questions or Issues
-If you have any questions or encounter issues while using this GitHub Actions workflow, please open an issue in the Issues section of your repository.
-
+MIT, as in the original repository.
