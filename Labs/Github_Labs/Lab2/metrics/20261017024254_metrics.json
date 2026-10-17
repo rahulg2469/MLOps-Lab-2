@@ -1,0 +1,20 @@
+{
+    "timestamp": "20261017024254",
+    "hyperparameters": {
+        "n_estimators": 200,
+        "learning_rate": 0.2,
+        "max_depth": 2
+    },
+    "uncalibrated": {
+        "f1": 0.9512,
+        "accuracy": 0.9649,
+        "brier": 0.026,
+        "log_loss": 0.1209
+    },
+    "calibrated": {
+        "f1": 0.95,
+        "accuracy": 0.9649,
+        "brier": 0.029,
+        "log_loss": 0.1118
+    }
+}
