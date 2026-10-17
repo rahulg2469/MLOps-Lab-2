@@ -82,6 +82,20 @@ Note: calibration does not always improve every metric. With the default setting
 
 To see the quality gate fail: run the push workflow by hand with `min_f1` set to `0.99`. The evaluate step fails (red X) and no commit is made.
 
+### Screenshots from this repo's runs
+
+**1. Actions tab: both workflows running successfully**
+![Actions tab](screenshots/1_actions.png)
+
+**2. Push run: metrics before and after calibration, quality gate passed, model committed**
+![Push run summary](screenshots/2_push_summary.png)
+
+**3. Nightly run: a random config (200 trees, learning rate 0.2, depth 2) beat the current model on Brier score (0.029 vs 0.0349), so it was promoted**
+![Nightly run summary](screenshots/3_nightly_summary.png)
+
+**4. Nightly run: the "only if better" commit step versioned the new model and metrics; "Keep current model" was skipped**
+![Nightly commit step](screenshots/4_nightly_commit.png)
+
 ## Running it locally (optional)
 
 **Requirements:**
