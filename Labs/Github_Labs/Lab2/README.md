@@ -32,7 +32,7 @@ Train (random config) -> Calibrate -> Evaluate + compare with current model -> C
 
 1. **Calibration actually happens now.** The original "calibration" workflows only retrained the model. There is now a dedicated calibration step (`src/calibrate_model.py`).
 2. **Quality gate.** If the calibrated model's test F1 falls below a threshold (default 0.90), the run fails and nothing is committed.
-3. **The nightly workflow has its own job.** It does a nightly hyperparameter search and promotes a new model only if it beats the current one on Brier score. Previously it duplicated the push workflow, and its paths pointed to `./src/...`, which does not exist in this repo, so it could not run.
+3. **The nightly workflow has its own job.** It does a nightly hyperparameter search and promotes a new model only if it beats the current one on Brier score. Previously it duplicated the push workflow, and its commit step used variables that were empty, so it could never commit.
 4. **Manual runs with inputs.** Both workflows can be started from the Actions tab (`workflow_dispatch`), with a choice of calibration method (sigmoid / isotonic) and the F1 threshold.
 5. **Run summary.** Each run posts a table of metrics before and after calibration, plus the gate and promotion decisions, on the run's summary page.
 6. **Path filter on push.** The push workflow only runs when Lab 2 code changes, not on every push to the repo.
