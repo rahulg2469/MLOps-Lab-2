@@ -1,8 +1,40 @@
 # Lab 2: Model Training, Calibration and Versioning with GitHub Actions
 
-This lab uses GitHub Actions to automatically train a classifier, calibrate its predicted probabilities, evaluate it against a quality gate, and version the resulting model and metrics by committing them back to the repository.
+This lab uses GitHub Actions to automatically train, calibrate, test and version a machine learning model every time the code changes, and again every night, with no one running anything by hand.
 
-## What the pipeline does
+## What the model does
+
+The model predicts whether a breast tumor is **malignant** (cancerous) or **benign**. Its input is 30 measurements of cell nuclei, such as radius, texture, smoothness and concavity, taken from digitized images of a fine-needle biopsy. The data is the Breast Cancer Wisconsin (Diagnostic) dataset: 569 real tumors, each labeled malignant or benign.
+
+For each tumor, the model outputs a probability, for example "82% chance this is malignant". A tumor is predicted malignant when that probability is 50% or higher.
+
+This is an educational example of an MLOps pipeline, not a medical tool.
+
+## Why calibration matters
+
+In a setting like this, the probability matters as much as the yes/no answer. A doctor might send every tumor above 20% for a follow-up biopsy, so a "20%" needs to mean what it says. Of all the tumors the model rates at 20%, about 20% should actually turn out malignant. A model can be accurate overall and still be overconfident (saying 95% when it is right only 85% of the time) or underconfident.
+
+**Calibration** fixes this. After the model is trained, a small second model (a calibrator) learns how to adjust the probabilities so they match reality. The pipeline measures probability quality with the **Brier score** and **log loss** (lower is better for both), before and after calibration. That way you can see whether calibration actually helped, instead of assuming it did.
+
+## What happens automatically
+
+The 569 tumors are split once, the same way every time:
+- 60% for training
+- 20% for calibration
+- 20% for testing
+
+**When code is pushed**, GitHub Actions:
+1. trains a Gradient Boosting model on the training tumors
+2. calibrates its probabilities on the calibration tumors, which the model did not train on
+3. tests both versions, before and after calibration, on the test tumors, which neither step has seen
+4. checks the **quality gate**: if the calibrated model's F1 score is below 0.90, the run fails and the model is thrown away. F1 balances catching malignant tumors against raising false alarms.
+5. if the gate passes, it commits the model and its metrics back to this repository, named with a timestamp (e.g. `model_20261017023615_gb.joblib`)
+
+**Every night**, a second workflow tries a new randomly chosen set of model settings (hyperparameters). It goes through the same calibrate and test steps, then compares the result with the current model, which is the most recently committed one. The new model is committed only if its probabilities are better calibrated (lower Brier score); otherwise nothing changes.
+
+The result is that the repository always holds the full history of every accepted model and its scores, and the newest timestamp is the model currently in use.
+
+## The two workflows
 
 There are two workflows. GitHub only runs workflows from the repository root, so the active files are in `.github/workflows/`. Identical copies are kept in `Labs/Github_Labs/Lab2/workflows/` for reference.
 
@@ -45,8 +77,8 @@ Train (random config) -> Calibrate -> Evaluate + compare with current model -> C
 - `evaluate_model.py` now writes metrics into `metrics/`. Previously it created the folder but saved the file to the current directory.
 - MLflow logging removed. Metrics are tracked in versioned JSON files in the repo and on the Actions summary page.
 - Removed unused files: `src/test.ipynb` (leftover Lab 1 notebook) and the `test/` folder (it only held an empty `__init__.py`).
-- Pinned dependency versions.
-- The two Lab 1 test workflows were disabled in this fork's Actions tab, so only Lab 2 runs appear there.
+- `requirements.txt`: same packages as the original; scikit-learn now requires 1.6 or newer (needed for `FrozenEstimator`).
+- The two Lab 1 test workflows were disabled in this fork's Actions tab, so only Lab 2 runs appear there. One of them is the file `github_lab2_unittest_action.yml`: despite its name, it tests Lab 1 (`Labs/Github_Labs/Lab1/test/test_unittest.py`) and is not part of this lab.
 
 
 ## Running it on GitHub (no local install needed)
@@ -71,8 +103,8 @@ You only need a GitHub account.
   |---|---|---|
   | f1 | 0.95 | 0.9367 |
   | accuracy | 0.9649 | 0.9561 |
-  | brier | 0.0337 | 0.0347 |
-  | log_loss | 0.1381 | 0.1312 |
+  | brier | 0.034 | 0.0349 |
+  | log_loss | 0.1398 | 0.1319 |
 
   followed by `Quality gate (F1 >= 0.9): passed` and the promotion decision.
 - A new commit from `github-actions[bot]` appears on `main`. It adds `models/model_<ts>_gb.joblib`, `models/model_<ts>_gb_calibrated.joblib` and `metrics/<ts>_metrics.json` under `Labs/Github_Labs/Lab2/`.
@@ -110,7 +142,7 @@ cd MLOps-Lab-2/Labs/Github_Labs/Lab2
 
 python -m venv .venv
 source .venv/bin/activate          # Windows Git Bash: source .venv/Scripts/activate
-pip install -r requirements.txt    # scikit-learn 1.6.1, numpy 2.2.6, joblib 1.4.2
+pip install -r requirements.txt
 
 # Push-workflow equivalent
 python src/train_model.py --timestamp 20260101000000
