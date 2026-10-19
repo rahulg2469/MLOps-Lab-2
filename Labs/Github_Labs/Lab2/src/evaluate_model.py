@@ -135,7 +135,11 @@ if __name__ == "__main__":
     write_github_file("GITHUB_STEP_SUMMARY", summary_text)
     write_github_file("GITHUB_OUTPUT", f"promote={'true' if promote else 'false'}\n")
 
-    # Fail the step (and the workflow) if the gate failed
+    # Push runs: a failed gate fails the step (and the workflow), so a code
+    # change that produces a bad model shows up as a red run.
+    # Nightly runs (--compare-latest): a failed gate just rejects this
+    # candidate (promote=false, nothing committed) and the run stays green.
     if not gate_passed:
         print(f"Quality gate failed: calibrated F1 {c['f1']} < {args.min_f1}")
-        sys.exit(1)
+        if not args.compare_latest:
+            sys.exit(1)
