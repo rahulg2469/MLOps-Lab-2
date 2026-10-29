@@ -290,10 +290,10 @@ In the **Actions** tab, open the latest **Lab1 CI - Lint, Test, Coverage** run.
 
 **Jobs (left side), all with green checkmarks:**
 ```
-✅ lint
-✅ test (3.10)
-✅ test (3.11)
-✅ test (3.12)
+lint  - passed
+test (3.10)  - passed
+test (3.11)  - passed
+test (3.12)  - passed
 ```
 The three `test` jobs start only after `lint` finishes, and they run in parallel.
 
@@ -324,9 +324,9 @@ These show that each gate actually works. Make the change, push it, watch the ru
 
 | Break this | Expected result |
 |---|---|
-| Add a line longer than 100 characters, or an unused `import os`, to `calculator.py` | ❌ `lint` fails, and the `test` jobs are **skipped** |
-| Change a CSV row to a wrong answer, e.g. `fun1,2,3,,6` | ❌ all 3 `test` jobs fail. The failing test is named in the log, e.g. `test_calculator_from_csv[fun1(2, 3)]` |
-| Delete `test_divide_by_zero` and the `fun5` error cases | Coverage drops. If it falls below 90%, ❌ the job fails with `FAIL Required test coverage of 90% not reached` |
+| Add a line longer than 100 characters, or an unused `import os`, to `calculator.py` | `lint` fails, and the `test` jobs are **skipped** |
+| Change a CSV row to a wrong answer, e.g. `fun1,2,3,,6` | All 3 `test` jobs fail. The failing test is named in the log, e.g. `test_calculator_from_csv[fun1(2, 3)]` |
+| Delete `test_divide_by_zero` and the `fun5` error cases | Coverage drops. If it falls below 90%, the job fails with `FAIL Required test coverage of 90% not reached` |
 
 You can do the same locally with the commands from section 5.
 
