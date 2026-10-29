@@ -1,42 +1,50 @@
-import sys
+"""Unittest tests for src/calculator.py.
+
+CHANGE: reads the same data/test_cases.csv using subTest, and adds
+error-handling tests for invalid inputs and division by zero.
+"""
+import csv
 import os
+import sys
 import unittest
 
-# Get the path to the project's root directory
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-sys.path.append(project_root)
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.append(PROJECT_ROOT)
 
-from src import calculator
+from src import calculator  # noqa: E402
+
+DATA_FILE = os.path.join(PROJECT_ROOT, "data", "test_cases.csv")
+
+
+def _to_number(text):
+    return float(text) if "." in text else int(text)
 
 
 class TestCalculator(unittest.TestCase):
 
-    def test_fun1(self):
-        self.assertEqual(calculator.fun1(2, 3), 5)
-        self.assertEqual(calculator.fun1(5, 0), 5)
-        
-        self.assertEqual(calculator.fun1(-1, 1), 0)
-        self.assertEqual(calculator.fun1(-1, -1), -2)
+    def test_cases_from_csv(self):
+        with open(DATA_FILE, newline="") as f:
+            rows = list(csv.DictReader(f))
+        self.assertGreater(len(rows), 0)
+        for row in rows:
+            args = [_to_number(row[k]) for k in ("x", "y", "z") if row[k] != ""]
+            expected = _to_number(row["expected"])
+            with self.subTest(function=row["function"], args=args):
+                func = getattr(calculator, row["function"])
+                self.assertAlmostEqual(func(*args), expected, places=5)
 
-    def test_fun2(self):
-        self.assertEqual(calculator.fun2(2, 3), -1)
-        self.assertEqual(calculator.fun2(5, 0), 5)
-        self.assertEqual(calculator.fun2(-1, 1), -2)
-        self.assertEqual(calculator.fun2(-1, -1), 0)
+    def test_invalid_inputs(self):
+        with self.assertRaises(ValueError):
+            calculator.fun1("a", 1)
+        with self.assertRaises(ValueError):
+            calculator.fun4(1, 2, "3")
+        with self.assertRaises(ValueError):
+            calculator.fun5(None, 2)
 
-    def test_fun3(self):
-        self.assertEqual(calculator.fun3(2, 3), 6)
-        self.assertEqual(calculator.fun3(5, 0), 0)
-        self.assertEqual(calculator.fun3(-1, 1), -1)
-        self.assertEqual(calculator.fun3(-1, -1), 1)
-
-    def test_fun4(self):
-        self.assertEqual(calculator.fun4(2, 3, 5), 10)
-        self.assertEqual(calculator.fun4(5, 0, -1), 4)
-        self.assertEqual(calculator.fun4(-1, -1, -1), -3)
-        self.assertEqual(calculator.fun4(-1, -1, 100), 98)
+    def test_divide_by_zero(self):
+        with self.assertRaises(ZeroDivisionError):
+            calculator.fun5(5, 0)
 
 
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
