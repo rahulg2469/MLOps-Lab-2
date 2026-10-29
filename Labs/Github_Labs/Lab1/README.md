@@ -161,8 +161,8 @@ python --version     # must show 3.10.x, 3.11.x or 3.12.x (on some systems: pyth
 ### 4.1 Get the code
 
 ```bash
-git clone https://github.com/<your-username>/<repo-name>.git
-cd <repo-name>/Labs/Github_Labs/Lab1
+git clone https://github.com/rahulg2469/MLOps-Lab-2.git
+cd MLOps-Lab-2/Labs/Github_Labs/Lab1
 ```
 
 ### 4.2 Create and activate a virtual environment
