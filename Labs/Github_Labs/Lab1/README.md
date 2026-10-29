@@ -335,11 +335,11 @@ You can do the same locally with the commands from section 5.
 
 All four jobs passed, with results for each Python version:
 
-![CI jobs and summary](ci-jobs-summary.png)
+![CI jobs and summary](CI jobs and summary.png)
 
 Python 3.12 results:
 
-![Python 3.12 summary](ci-summary-py312.png)
+![Python 3.12 summary](Python 3.12 summary)
 
 ## 9. Adding a new test case
 
