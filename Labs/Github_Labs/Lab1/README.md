@@ -331,6 +331,15 @@ These show that each gate actually works. Make the change, push it, watch the ru
 You can do the same locally with the commands from section 5.
 
 ---
+### Screenshots from an actual run
+
+All four jobs passed, with results for each Python version:
+
+![CI jobs and summary](ci-jobs-summary.png)
+
+Python 3.12 results:
+
+![Python 3.12 summary](ci-summary-py312.png)
 
 ## 9. Adding a new test case
 
